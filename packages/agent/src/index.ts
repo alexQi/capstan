@@ -26,7 +26,9 @@ export { openaiProvider, anthropicProvider } from "./llm.js";
 export type {
   LLMProvider,
   LLMMessage,
+  LLMContentPart,
   LLMResponse,
   LLMStreamChunk,
   LLMOptions,
+  LLMToolSpec,
 } from "./llm.js";
