@@ -1,8 +1,8 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, rename, stat, writeFile } from "node:fs/promises";
 
 type EsbuildBuild = typeof import("esbuild").build;
 
@@ -22,6 +22,16 @@ interface CachedModule {
  */
 const moduleCache = new Map<string, CachedModule>();
 const virtualModuleRegistry = new Map<string, Record<string, unknown>>();
+
+/**
+ * In-flight load promises keyed by absolute file path. De-dupes concurrent
+ * `loadRouteModule()` calls for the same file so a single compile+import is
+ * shared across all callers. Without this, the dev server's concurrent route
+ * loading can invoke `importRouteFile()` for the same path in parallel, racing
+ * the compiled-file write and importing a partially-written (empty) module —
+ * which surfaces downstream as "Invalid middleware export" / missing handlers.
+ */
+const inflightLoads = new Map<string, Promise<Record<string, unknown>>>();
 
 /**
  * Monotonically increasing generation counter bumped on explicit cache
@@ -142,7 +152,12 @@ async function importRouteFile(filePath: string, cacheKey: string): Promise<Reco
       .replaceAll(`from "react";`, `from ${JSON.stringify(FRAMEWORK_REACT_ENTRY_URL)};`)
       .replaceAll(`from "react/jsx-runtime";`, `from ${JSON.stringify(FRAMEWORK_REACT_JSX_RUNTIME_ENTRY_URL)};`)
       .replaceAll(`from "react/jsx-dev-runtime";`, `from ${JSON.stringify(FRAMEWORK_REACT_JSX_DEV_RUNTIME_ENTRY_URL)};`);
-    await writeFile(compiledPath, normalizedOutput, "utf-8");
+    // Write atomically (unique temp file + rename) so that a concurrent
+    // `import()` of the same compiled path can never observe a truncated /
+    // partially-written file. rename(2) within the same directory is atomic.
+    const tempPath = `${compiledPath}.${process.pid}.${randomUUID()}.tmp`;
+    await writeFile(tempPath, normalizedOutput, "utf-8");
+    await rename(tempPath, compiledPath);
 
     return (await import(pathToFileURL(compiledPath).href)) as Record<string, unknown>;
   }
@@ -174,9 +189,23 @@ export async function loadRouteModule(
     return cached.mod;
   }
 
-  const mod = await importRouteFile(filePath, `${fileStat.mtimeMs}_${cacheGeneration}`);
-  moduleCache.set(filePath, { mod, mtimeMs: fileStat.mtimeMs });
-  return mod;
+  // Share a single compile+import across concurrent callers for the same file.
+  const existing = inflightLoads.get(filePath);
+  if (existing) {
+    return existing;
+  }
+
+  const loadPromise = (async () => {
+    const mod = await importRouteFile(filePath, `${fileStat.mtimeMs}_${cacheGeneration}`);
+    moduleCache.set(filePath, { mod, mtimeMs: fileStat.mtimeMs });
+    return mod;
+  })();
+  inflightLoads.set(filePath, loadPromise);
+  try {
+    return await loadPromise;
+  } finally {
+    inflightLoads.delete(filePath);
+  }
 }
 
 /**
