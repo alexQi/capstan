@@ -16,7 +16,9 @@ export type Tokenizer = (text: string) => string[];
 // numbers and alphanumerics ("2024", "gpt", "v2"), which we must keep.
 const WORDY = /[\p{L}\p{N}]/u;
 
-// Unicode-aware (≈ ASCII `\w`) split, used only if `Intl.Segmenter` is missing.
+// Runs of non-(letter|number|underscore) — the word/part separator. Used to
+// split intra-word punctuation out of a segment (config.yaml -> config/yaml)
+// and as the whole-text tokeniser when `Intl.Segmenter` is unavailable.
 const FALLBACK_SPLIT = /[^\p{L}\p{N}_]+/u;
 
 const segmenter: Intl.Segmenter | null = (() => {
@@ -40,7 +42,14 @@ export const defaultTokenizer: Tokenizer = (text) => {
   }
   const out: string[] = [];
   for (const { segment } of segmenter.segment(lower)) {
-    if (WORDY.test(segment)) out.push(segment);
+    if (!WORDY.test(segment)) continue; // skip whitespace / punctuation segments
+    // Intl.Segmenter keeps intra-word `.` / `'` (e.g. "config.yaml", "user's",
+    // "3.14"); split those out so code, filenames, and versions stay searchable
+    // by part. Underscore is kept (identifier-like), and CJK / word segments
+    // have no such punctuation, so they pass through unchanged.
+    for (const part of segment.split(FALLBACK_SPLIT)) {
+      if (part.length > 0) out.push(part);
+    }
   }
   return out;
 };

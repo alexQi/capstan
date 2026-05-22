@@ -2275,7 +2275,7 @@ type Tokenizer = (text: string) => string[]
 
 `hybridSearch` fuses **Okapi BM25** keyword relevance with vector cosine similarity. The keyword component is real BM25 — term-frequency saturation (`k1`, default 1.5), document-length normalisation (`b`, default 0.75), and probabilistic IDF computed over the candidate `items` — normalised to [0, 1] and combined via `keywordWeight` / `vectorWeight` (default 0.3 / 0.7).
 
-**Tokenisation.** The keyword side tokenises with the runtime's built-in `Intl.Segmenter` (ICU word segmentation): it segments CJK / Japanese / Thai by dictionary (`机器学习` → `机器` / `学习`) as well as space-delimited languages, and keeps numbers — no extra dependency. To use a dictionary segmenter such as jieba, call `setTokenizer` once at startup (the same hook is exported from `@zauso-ai/capstan-ai` for memory recall):
+**Tokenisation.** The keyword side tokenises with the runtime's built-in `Intl.Segmenter` (ICU word segmentation): it segments CJK / Japanese / Thai by dictionary (`机器学习` → `机器` / `学习`) as well as space-delimited languages, keeps numbers, and splits code identifiers / filenames on internal punctuation (`config.yaml` → `config` / `yaml`) — no extra dependency. To use a dictionary segmenter such as jieba, call `setTokenizer` once at startup (the same hook is exported from `@zauso-ai/capstan-ai` for memory recall):
 
 ```typescript
 import { setTokenizer } from "@zauso-ai/capstan-db";

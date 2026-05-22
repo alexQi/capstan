@@ -427,6 +427,22 @@ describe("hybridSearch", () => {
     expect(results[0]!.score).toBeCloseTo(1.0, 10);
     expect(results.find((r) => r.id === "c2")!.score).toBeCloseTo(0, 10);
   });
+
+  it("splits dotted identifiers so a query for a part matches", () => {
+    const items: HybridItem[] = [
+      { id: "f1", text: "see config.yaml for settings", vector: [1, 0] },
+      { id: "f2", text: "nothing relevant here", vector: [0, 1] },
+    ];
+    // "config.yaml" -> config / yaml, so a "config" query matches f1.
+    const results = hybridSearch("config", [1, 0], items, {
+      k: 2,
+      keywordWeight: 1,
+      vectorWeight: 0,
+    });
+    expect(results[0]!.id).toBe("f1");
+    expect(results[0]!.score).toBeCloseTo(1.0, 10);
+    expect(results.find((r) => r.id === "f2")!.score).toBeCloseTo(0, 10);
+  });
 });
 
 // ---------------------------------------------------------------------------

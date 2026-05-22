@@ -1537,7 +1537,8 @@ const results = hybridSearch("deployment architecture", queryVector, items, {
 });
 
 // Keyword tokenisation uses Intl.Segmenter (ICU): segments CJK/Japanese
-// (机器学习 -> 机器/学习) and keeps numbers, no extra dependency. To plug in
+// (机器学习 -> 机器/学习), keeps numbers, and splits dotted identifiers
+// (config.yaml -> config/yaml), no extra dependency. To plug in
 // jieba etc., call setTokenizer once at startup (also on @zauso-ai/capstan-ai
 // for memory recall):
 //   import { setTokenizer } from "@zauso-ai/capstan-db";

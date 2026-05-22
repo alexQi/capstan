@@ -31,6 +31,15 @@ describe("bm25QueryTerms", () => {
       "年",
     ]);
   });
+
+  it("splits code identifiers / filenames / versions on intra-word punctuation", () => {
+    // Intl.Segmenter keeps "config.yaml" / "3.14" / "user's" whole; we split the
+    // parts out so they stay searchable. Underscores are kept (identifier-like).
+    expect(bm25QueryTerms("config.yaml node.js v2.0 user's")).toEqual([
+      "config", "yaml", "node", "js", "v2", "0", "user", "s",
+    ]);
+    expect(bm25QueryTerms("snake_case_var")).toEqual(["snake_case_var"]);
+  });
 });
 
 describe("bm25Scores", () => {
@@ -115,6 +124,15 @@ describe("bm25Scores", () => {
     const acc = bm25Scores(bm25QueryTerms("café"), ["le café est bon", "tea house"]);
     expect(acc[0]).toBeGreaterThan(0);
     expect(acc[1]).toBeCloseTo(0, 10);
+  });
+
+  it("a query for an identifier part matches a doc with the whole identifier", () => {
+    const s = bm25Scores(bm25QueryTerms("config"), [
+      "edit config.yaml now",
+      "unrelated text",
+    ]);
+    expect(s[0]).toBeGreaterThan(0); // "config" matches the split "config.yaml"
+    expect(s[1]).toBeCloseTo(0, 10);
   });
 });
 
