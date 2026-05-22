@@ -242,3 +242,29 @@ describe("invalidateModuleCache", () => {
     expect(mod2["b"]).toBe(2);
   });
 });
+
+// ---------------------------------------------------------------------------
+// concurrency — loader race regression
+// ---------------------------------------------------------------------------
+
+describe("loadRouteModule — concurrency", () => {
+  it("de-dupes concurrent loads of the same file (no partially-written import)", async () => {
+    const filePath = await writeModule(
+      "concurrent.ts",
+      `export const handler = () => "ok";\nexport const value = 42;`,
+    );
+    // Fire many concurrent loads of the SAME path. The in-flight de-dupe plus
+    // the atomic compile-write must make every caller resolve to a complete
+    // module — never a truncated/partially-written one (which previously
+    // surfaced as "Invalid middleware export" / missing handlers).
+    const mods = await Promise.all(
+      Array.from({ length: 20 }, () => loadRouteModule(filePath)),
+    );
+    for (const mod of mods) {
+      expect(mod["value"]).toBe(42);
+      expect(typeof mod["handler"]).toBe("function");
+    }
+    // All concurrent callers share one compile+import.
+    for (const mod of mods) expect(mod).toBe(mods[0]);
+  });
+});
