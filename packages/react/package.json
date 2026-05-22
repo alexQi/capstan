@@ -12,7 +12,8 @@
     "./client": {
       "import": "./dist/client/index.js",
       "types": "./dist/client/index.d.ts"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "dependencies": {
     "idiomorph": "^0.3.0"
