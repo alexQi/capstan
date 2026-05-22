@@ -411,6 +411,22 @@ describe("hybridSearch", () => {
     expect(results[0]!.id).toBe("u1");
     expect(results[0]!.score).toBeCloseTo(1.0, 10);
   });
+
+  it("segments CJK so a query matches by shared word", () => {
+    const items: HybridItem[] = [
+      { id: "c1", text: "机器学习很有趣", vector: [1, 0] },
+      { id: "c2", text: "今天天气不错", vector: [0, 1] },
+    ];
+    // "机器学习" segments to 机器/学习 (ICU); c1 shares both words, c2 none.
+    const results = hybridSearch("机器学习", [1, 0], items, {
+      k: 2,
+      keywordWeight: 1,
+      vectorWeight: 0,
+    });
+    expect(results[0]!.id).toBe("c1");
+    expect(results[0]!.score).toBeCloseTo(1.0, 10);
+    expect(results.find((r) => r.id === "c2")!.score).toBeCloseTo(0, 10);
+  });
 });
 
 // ---------------------------------------------------------------------------

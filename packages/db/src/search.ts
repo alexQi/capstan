@@ -1,3 +1,5 @@
+import { tokenize } from "./tokenize.js";
+
 // ---------------------------------------------------------------------------
 // Vector similarity search utilities
 // ---------------------------------------------------------------------------
@@ -124,8 +126,8 @@ export function hybridSearch(
   const k1 = Math.max(0, opts?.bm25?.k1 ?? 1.5);
   const b = Math.min(1, Math.max(0, opts?.bm25?.b ?? 0.75));
 
-  // Tokenise the query into unique lower-case terms.
-  const queryTerms = tokenize(query);
+  // Tokenise the query into unique terms (via the active tokeniser).
+  const queryTerms = [...new Set(tokenize(query))];
   if (queryTerms.length === 0 && queryVector.length === 0) {
     return [];
   }
@@ -155,30 +157,10 @@ export function hybridSearch(
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Split on runs of non-(letter|number|underscore), Unicode-aware (`u` flag +
- * `\p{L}`/`\p{N}`): keeps accented letters and CJK runs as tokens rather than
- * dropping them like the ASCII `\W`. ASCII text splits identically.
- */
-const TOKEN_SPLIT = /[^\p{L}\p{N}_]+/u;
-
-/** Tokeniser: lower-cased, de-duplicated terms. */
-function tokenize(text: string): string[] {
-  return [
-    ...new Set(
-      text
-        .toLowerCase()
-        .split(TOKEN_SPLIT)
-        .filter((t) => t.length > 0),
-    ),
-  ];
-}
-
-/** Term-frequency map for a document (lower-cased; keeps counts). */
+/** Term-frequency map for a document (keeps counts), via the active tokeniser. */
 function termCounts(text: string): Map<string, number> {
   const counts = new Map<string, number>();
-  for (const t of text.toLowerCase().split(TOKEN_SPLIT)) {
-    if (t.length === 0) continue;
+  for (const t of tokenize(text)) {
     counts.set(t, (counts.get(t) ?? 0) + 1);
   }
   return counts;

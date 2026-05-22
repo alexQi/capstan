@@ -1,5 +1,6 @@
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, afterEach } from "bun:test";
 import { bm25Scores, bm25QueryTerms } from "../../packages/ai/src/bm25.ts";
+import { setTokenizer } from "../../packages/ai/src/tokenize.ts";
 
 describe("bm25QueryTerms", () => {
   it("lower-cases, splits on non-word chars, and de-duplicates", () => {
@@ -12,12 +13,22 @@ describe("bm25QueryTerms", () => {
     expect(bm25QueryTerms("")).toEqual([]);
     expect(bm25QueryTerms("  !!! ??? ")).toEqual([]);
   });
-  it("keeps Unicode letters (accented, CJK) and underscores as tokens", () => {
-    // ASCII \W would corrupt "café"->"caf" and drop CJK entirely.
+  it("segments CJK by word, keeps accented letters / underscores / numbers", () => {
+    // Intl.Segmenter splits CJK into words (机器学习 -> 机器/学习) via ICU and
+    // keeps numbers; ASCII \W would corrupt "café"->"caf" and drop CJK entirely.
     expect(bm25QueryTerms("Café_crème 机器学习, NAÏVE")).toEqual([
       "café_crème",
-      "机器学习",
+      "机器",
+      "学习",
       "naïve",
+    ]);
+    expect(bm25QueryTerms("GPT-4 发布于 2024 年")).toEqual([
+      "gpt",
+      "4",
+      "发布",
+      "于",
+      "2024",
+      "年",
     ]);
   });
 });
@@ -92,13 +103,32 @@ describe("bm25Scores", () => {
     expect(s[5]).toBeGreaterThan(s[0]!); // rare "data" doc > common "machine learning" doc
   });
 
-  it("matches CJK / accented terms that ASCII \\W tokenisation would drop", () => {
-    const cjk = bm25Scores(["机器学习"], ["机器学习 笔记", "english only"]);
-    expect(cjk[0]).toBeGreaterThan(0); // CJK doc matched (was dropped under \W)
-    expect(cjk[1]).toBeCloseTo(0, 10);
+  it("CJK word segmentation enables sub-phrase matching", () => {
+    // Docs have no spaces; segmentation lets the query share individual words.
+    const docs = ["机器学习很有趣", "深度学习入门", "今天天气不错"];
+    const s = bm25Scores(bm25QueryTerms("机器学习"), docs); // query -> ["机器","学习"]
+    expect(s[0]).toBeGreaterThan(0); // shares 机器 + 学习
+    expect(s[1]).toBeGreaterThan(0); // shares 学习
+    expect(s[2]).toBeCloseTo(0, 10); // no shared word
+    expect(s[0]).toBeGreaterThan(s[1]!); // doc0 shares two words, doc1 one
 
-    const acc = bm25Scores(["café"], ["le café est bon", "tea house"]);
+    const acc = bm25Scores(bm25QueryTerms("café"), ["le café est bon", "tea house"]);
     expect(acc[0]).toBeGreaterThan(0);
     expect(acc[1]).toBeCloseTo(0, 10);
+  });
+});
+
+describe("pluggable tokenizer", () => {
+  afterEach(() => setTokenizer()); // restore the Intl.Segmenter default
+
+  it("setTokenizer swaps the tokeniser used by bm25QueryTerms", () => {
+    setTokenizer((t) => t.toLowerCase().split("/").filter(Boolean));
+    expect(bm25QueryTerms("a/b/b/c")).toEqual(["a", "b", "c"]);
+  });
+
+  it("setTokenizer() with no argument restores the Intl.Segmenter default", () => {
+    setTokenizer((t) => [t]); // whole-string tokeniser
+    setTokenizer(); // reset
+    expect(bm25QueryTerms("机器学习")).toEqual(["机器", "学习"]);
   });
 });
