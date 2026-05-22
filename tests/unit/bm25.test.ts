@@ -53,4 +53,34 @@ describe("bm25Scores", () => {
     const s = bm25Scores(["term"], ["term aa", "term bb cc dd ee"], { b: 0 });
     expect(s[0]).toBeCloseTo(s[1]!, 10);
   });
+
+  it("clamps an out-of-range b so scores never go negative", () => {
+    // b > 1 would make (1 - b + b·|D|/avgdl) negative for short docs and yield
+    // negative scores; clamping to [0,1] keeps every score in [0,1].
+    const s = bm25Scores(["term"], ["term aa", "term bb cc dd ee"], { b: 5 });
+    for (const x of s) {
+      expect(x).toBeGreaterThanOrEqual(0);
+      expect(x).toBeLessThanOrEqual(1);
+    }
+    // clamped to b=1, so it equals the b=1 result
+    const at1 = bm25Scores(["term"], ["term aa", "term bb cc dd ee"], { b: 1 });
+    expect(s[0]).toBeCloseTo(at1[0]!, 10);
+    expect(s[1]).toBeCloseTo(at1[1]!, 10);
+  });
+
+  it("IDF dominance: a single rare term can outrank a doc matching more common terms", () => {
+    // "machine"/"learning" appear in 5 of 6 docs (common, low IDF); "data" in
+    // 1 (rare, high IDF). doc matching only "data" beats one matching both
+    // common terms — BM25 does NOT guarantee "more matching terms ranks higher".
+    const docs = [
+      "machine learning a",
+      "machine learning b",
+      "machine learning c",
+      "machine learning d",
+      "machine learning e",
+      "data f g",
+    ];
+    const s = bm25Scores(["machine", "learning", "data"], docs);
+    expect(s[5]).toBeGreaterThan(s[0]!); // rare "data" doc > common "machine learning" doc
+  });
 });

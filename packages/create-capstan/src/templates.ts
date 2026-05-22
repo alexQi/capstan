@@ -1520,17 +1520,20 @@ Search utilities:
 \`\`\`typescript
 import { cosineDistance, findNearest, hybridSearch } from "@zauso-ai/capstan-db";
 
-// Find nearest vectors by cosine distance
-const results = await findNearest(db, "document", queryVector, { limit: 10 });
+// findNearest(query, items, k): top-k by cosine similarity.
+// items: { id: string; vector: number[] }[]
+const nearest = findNearest(queryVector, items, 10);
 
-// Cosine distance for custom queries
+// Cosine distance for custom comparisons
 const dist = cosineDistance(vectorA, vectorB);
 
-// Hybrid search: combines vector similarity + full-text keyword matching
-const results = await hybridSearch(db, "document", {
-  query: "deployment architecture",
-  vector: queryVector,
-  limit: 10,
+// Hybrid search: Okapi BM25 keyword relevance fused with vector cosine.
+// items: { id: string; text: string; vector: number[] }[]
+const results = hybridSearch("deployment architecture", queryVector, items, {
+  k: 10,
+  keywordWeight: 0.3,
+  vectorWeight: 0.7,
+  bm25: { k1: 1.5, b: 0.75 }, // optional BM25 tuning (defaults shown)
 });
 \`\`\`
 

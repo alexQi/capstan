@@ -119,8 +119,10 @@ export function hybridSearch(
   const k = opts?.k ?? 10;
   const keywordWeight = opts?.keywordWeight ?? 0.3;
   const vectorWeight = opts?.vectorWeight ?? 0.7;
-  const k1 = opts?.bm25?.k1 ?? 1.5;
-  const b = opts?.bm25?.b ?? 0.75;
+  // Clamp to valid BM25 ranges so an out-of-range option can't make the
+  // length-normalisation term negative (which would yield negative scores).
+  const k1 = Math.max(0, opts?.bm25?.k1 ?? 1.5);
+  const b = Math.min(1, Math.max(0, opts?.bm25?.b ?? 0.75));
 
   // Tokenise the query into unique lower-case terms.
   const queryTerms = tokenize(query);

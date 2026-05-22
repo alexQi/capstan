@@ -43,8 +43,11 @@ export function bm25Scores(
 ): number[] {
   const N = docs.length;
   if (N === 0) return [];
-  const k1 = opts?.k1 ?? 1.5;
-  const b = opts?.b ?? 0.75;
+  // Clamp to valid BM25 ranges: an out-of-range `b` would make the length-norm
+  // term `(1 − b + b·|D|/avgdl)` negative for short docs, yielding negative
+  // scores that break the [0,1] normalisation and the downstream `> 0` filter.
+  const k1 = Math.max(0, opts?.k1 ?? 1.5);
+  const b = Math.min(1, Math.max(0, opts?.b ?? 0.75));
 
   const docCounts = docs.map(termCounts);
   const docLen = docCounts.map((c) => {
